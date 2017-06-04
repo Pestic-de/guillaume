@@ -25,11 +25,12 @@ type Tell struct {
 const channel = "#Téladiaire"
 const serverssl = "irc.inframonde.org:6697"
 
-func insert_tell(db *sqlx.DB, e *irc.Event) {
+func insert_tell(db *sqlx.DB, e *irc.Event) bool {
 	data := strings.Split(e.Message(), " ")
 	sender := e.Nick
 	is_read := 0
 	time_sent := time.Now().Unix()
+
 	if data[0] == ".tell" && len(data) > 2{
 		target := data[1]
 		message := strings.Join(data[2:], " ")
@@ -38,8 +39,10 @@ func insert_tell(db *sqlx.DB, e *irc.Event) {
 		tx := db.MustBegin()
 		tx.MustExec("INSERT INTO tell (sender, target, message, time_sent, is_read) VALUES ($1, $2, $3, $4, $5)", sender, target, message, time_sent, is_read)
 		tx.Commit()
+
+		return true
 	} else {
-		return
+		return false
 	}
 }
 
@@ -81,10 +84,17 @@ func main() {
 		}
 		})
 	irc_conn.AddCallback("PRIVMSG", func (e *irc.Event) {
-		insert_tell(db, e)
+		if insert_tell(db, e) {
+			irc_conn.Notice(e.Nick, "Done.")
+		} else {
+			irc_conn.Notice(e.Nick, "Error.")
+		}
+
 		if i, tells := search_tells(db, e.Nick); i > 0 {
 			for _, v := range(tells) {
-				irc_conn.Noticef(v.Target, "%s said : [%s]", v.Sender, v.Message)
+				loc, _ := time.LoadLocation("Europe/Paris")
+				tm := time.Unix(int64(v.TimeSent), 0).In(loc).Format("15:04 - 02/01")
+				irc_conn.Noticef(v.Target, "[%s] %s> %s", tm, v.Sender, v.Message)
 			}
 
 			mark_as_read(db, e.Nick)
