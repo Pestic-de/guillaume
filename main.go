@@ -86,8 +86,6 @@ func main() {
 	irc_conn.AddCallback("PRIVMSG", func (e *irc.Event) {
 		if insert_tell(db, e) {
 			irc_conn.Notice(e.Nick, "Done.")
-		} else {
-			irc_conn.Notice(e.Nick, "Error.")
 		}
 
 		if i, tells := search_tells(db, e.Nick); i > 0 {
